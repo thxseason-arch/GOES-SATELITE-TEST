@@ -2,6 +2,7 @@ streamlit
 s3fs
 xarray
 h5netcdf
+h5py
 matplotlib
 numpy
 imageio
