@@ -2,9 +2,8 @@ streamlit
 s3fs
 xarray
 h5netcdf
-h5py
-cartopy
 matplotlib
 numpy
 imageio
 pillow
+cartopy
