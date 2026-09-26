@@ -1,6 +1,5 @@
 import os
 import datetime
-import base64
 import s3fs
 import xarray as xr
 import numpy as np
@@ -24,7 +23,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Estilo CSS Personalizado (Tema Escuro Profissional)
 st.markdown("""
     <style>
     .stApp {
@@ -53,13 +51,6 @@ st.markdown("""
     .stButton>button:hover {
         background-color: #0369a1;
         color: #ffffff;
-    }
-    .status-card {
-        background-color: #0f172a;
-        border: 1px solid #1e293b;
-        border-radius: 6px;
-        padding: 16px;
-        margin-bottom: 20px;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -182,12 +173,26 @@ def process_and_render_scene(fs, s3_file, bbox, date_obj, hour_utc, minute_utc, 
         p = ccrs.Geostationary(central_longitude=lon_0, satellite_height=h, sweep_axis=sweep)
         pc = ccrs.PlateCarree()
         
-        x1_m, y1_m = p.transform_point(bbox['min_lon'], bbox['min_lat'], pc)
-        x2_m, y2_m = p.transform_point(bbox['max_lon'], bbox['max_lat'], pc)
+        # 1. AMOSTRAGEM RIGOROSA DE BORDAS DA BOUNDING BOX
+        lons_seq = np.linspace(bbox['min_lon'], bbox['max_lon'], 50)
+        lats_seq = np.linspace(bbox['min_lat'], bbox['max_lat'], 50)
         
-        x_min_m, x_max_m = sorted([x1_m, x2_m])
-        y_min_m, y_max_m = sorted([y1_m, y2_m])
+        perim_lons = np.concatenate([lons_seq, lons_seq, np.full_like(lats_seq, bbox['min_lon']), np.full_like(lats_seq, bbox['max_lon'])])
+        perim_lats = np.concatenate([np.full_like(lons_seq, bbox['min_lat']), np.full_like(lons_seq, bbox['max_lat']), lats_seq, lats_seq])
         
+        pts = p.transform_points(pc, perim_lons, perim_lats)
+        valid = np.isfinite(pts[:, 0]) & np.isfinite(pts[:, 1])
+        
+        if np.any(valid):
+            x_min_m, x_max_m = pts[valid, 0].min(), pts[valid, 0].max()
+            y_min_m, y_max_m = pts[valid, 1].min(), pts[valid, 1].max()
+        else:
+            x1_m, y1_m = p.transform_point(bbox['min_lon'], bbox['min_lat'], pc)
+            x2_m, y2_m = p.transform_point(bbox['max_lon'], bbox['max_lat'], pc)
+            x_min_m, x_max_m = sorted([x1_m, x2_m])
+            y_min_m, y_max_m = sorted([y1_m, y2_m])
+        
+        # Radiantes para fatiar o xarray
         x_left_rad, x_right_rad = x_min_m / h, x_max_m / h
         y_bottom_rad, y_top_rad = y_min_m / h, y_max_m / h
         
@@ -200,9 +205,25 @@ def process_and_render_scene(fs, s3_file, bbox, date_obj, hour_utc, minute_utc, 
             
         cmi_data = np.nan_to_num(data_slice.values, nan=0.0)
         
-        fig = plt.figure(figsize=(10, 10), dpi=180, facecolor='#05070a')
+        # 2. EXTENT REAL BASEADO NA MATRIZ RECORTADA
+        img_x_min = float(data_slice.x.min()) * h
+        img_x_max = float(data_slice.x.max()) * h
+        img_y_min = float(data_slice.y.min()) * h
+        img_y_max = float(data_slice.y.max()) * h
+        
+        # 3. PROPORÇÃO PROPORCIONAL DA FIGURA (ASPECT RATIO)
+        dx = img_x_max - img_x_min
+        dy = img_y_max - img_y_min
+        aspect = dy / dx if dx > 0 else 1.0
+        
+        fig_width = 10
+        fig_height = max(4, min(14, fig_width * aspect))
+        
+        fig = plt.figure(figsize=(fig_width, fig_height), dpi=180, facecolor='#05070a')
         ax = plt.axes(projection=p, facecolor='#05070a')
-        ax.set_extent([x_min_m, x_max_m, y_min_m, y_max_m], crs=p)
+        
+        # Garantir enquadramento exato
+        ax.set_extent([img_x_min, img_x_max, img_y_min, img_y_max], crs=p)
         
         if band == 'C04':
             cmap = create_cirrus_colormap_soft()
@@ -225,12 +246,13 @@ def process_and_render_scene(fs, s3_file, bbox, date_obj, hour_utc, minute_utc, 
             
         ax.imshow(
             cmi_data, origin='upper',
-            extent=[x_min_m, x_max_m, y_min_m, y_max_m],
+            extent=[img_x_min, img_x_max, img_y_min, img_y_max],
             transform=p, cmap=cmap, norm=norm, interpolation=interpolation
         )
         
-        ax.add_feature(cfeature.COASTLINE, edgecolor='#475569', linewidth=0.8, zorder=5)
-        ax.add_feature(cfeature.BORDERS, edgecolor='#334155', linewidth=0.5, linestyle=':', zorder=5)
+        # Camadas vetoriais alinhadas
+        ax.add_feature(cfeature.COASTLINE, edgecolor='#38bdf8', linewidth=0.9, zorder=5)
+        ax.add_feature(cfeature.BORDERS, edgecolor='#64748b', linewidth=0.6, linestyle=':', zorder=5)
         
         if show_glm:
             overlay_glm_lightning(fs, sat, date_obj, hour_utc, minute_utc, bbox, ax, pc, band=band)
@@ -251,7 +273,6 @@ def process_and_render_scene(fs, s3_file, bbox, date_obj, hour_utc, minute_utc, 
 st.title("SISTEMA DE PROCESSAMENTO DE DADOS SATELLITE GOES")
 st.markdown("---")
 
-# Painel Lateral
 st.sidebar.header("CONFIGURAÇÃO DE PARÂMETROS")
 
 sat = st.sidebar.selectbox("Satélite", [('GOES-16 (East)', 'noaa-goes16'), ('GOES-19 (East Operacional)', 'noaa-goes19')], format_func=lambda x: x[0])[1]
@@ -283,21 +304,17 @@ if 'GIF' in out_fmt:
     gif_interval = st.sidebar.select_slider("Intervalo entre Quadros (Min)", options=[10, 15, 20, 30], value=15)
     gif_fps = st.sidebar.slider("Quadros por Segundo (FPS)", 1, 5, 2)
 
-# Área de Seleção Geográfica (Mapa Folium)
 st.subheader("Área de Interesse Geográfico (Bounding Box)")
 st.caption("Utilize a ferramenta de desenho de retângulo no canto esquerdo do mapa para delimitar a região geográfica.")
 
-# Inicializar coordenadas padrão
 min_lon, max_lon, min_lat, max_lat = -60.0, -40.0, -25.0, -5.0
 
-# Mapa Interativo Folium
 m = folium.Map(location=[-14.2350, -51.9253], zoom_start=4, tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", attr="Esri")
 draw = Draw(export=False, draw_options={'rectangle': True, 'polyline': False, 'polygon': False, 'circle': False, 'marker': False, 'circlemarker': False})
 draw.add_to(m)
 
 map_data = st_folium(m, width=1000, height=400)
 
-# Atualizar coordenadas se o utilizador desenhar no mapa
 if map_data and map_data.get("last_active_drawing"):
     coords = map_data["last_active_drawing"]["geometry"]["coordinates"][0]
     lons = [c[0] for c in coords]
@@ -315,7 +332,6 @@ bbox = {"min_lon": c_min_lon, "max_lon": c_max_lon, "min_lat": c_min_lat, "max_l
 
 st.markdown("---")
 
-# Botão de Execução
 if st.button("GERAR PROCESSAMENTO"):
     status_box = st.empty()
     status_box.info("A estabelecer ligação aos servidores da NOAA no AWS S3...")
