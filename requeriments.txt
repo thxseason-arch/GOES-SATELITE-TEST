@@ -1,0 +1,9 @@
+streamlit
+s3fs
+xarray
+h5netcdf
+cartopy
+matplotlib
+numpy
+imageio
+pillow
