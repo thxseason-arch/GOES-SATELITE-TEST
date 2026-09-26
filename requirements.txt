@@ -7,3 +7,5 @@ numpy
 imageio
 pillow
 cartopy
+folium
+streamlit-folium
