@@ -1,3 +1,40 @@
+import streamlit as st
+
+# Otimização visual para aspeto de App Nativa
+st.markdown("""
+    <style>
+    /* Esconder cabeçalho, rodapé e menu do Streamlit */
+    #MainMenu {visibility: hidden;}
+    header {visibility: hidden;}
+    footer {visibility: hidden;}
+    .stDeployButton {display:none;}
+    
+    /* Remover margens internas de desktop */
+    .block-container {
+        padding-top: 1rem !important;
+        padding-bottom: 2rem !important;
+        padding-left: 0.8rem !important;
+        padding-right: 0.8rem !important;
+    }
+    
+    /* Botões com aspeto móvel (largura total e cantos arredondados) */
+    .stButton > button {
+        width: 100% !important;
+        border-radius: 12px !important;
+        height: 3.2em !important;
+        font-weight: 600 !important;
+        background-color: #1f2937 !important;
+        color: #ffffff !important;
+        border: 1px solid #374151 !important;
+    }
+    
+    /* Ocultar barra de scroll horizontal indesejada */
+    .main {
+        overflow-x: hidden;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 import os
 import datetime
 import s3fs
