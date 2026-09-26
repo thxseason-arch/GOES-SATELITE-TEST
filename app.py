@@ -332,7 +332,7 @@ if st.button("GERAR PROCESSAMENTO"):
             
             status_box.empty()
             st.subheader("Resultado do Processamento")
-            st.image(out_file, use_column_width=True)
+            st.image(out_file, use_container_width=True)
             
             with open(out_file, "rb") as file:
                 st.download_button(
@@ -381,7 +381,7 @@ if st.button("GERAR PROCESSAMENTO"):
                 
                 status_box.empty()
                 st.subheader("Resultado da Animação")
-                st.image(gif_file, use_column_width=True)
+                st.image(gif_file, use_container_width=True)
                 
                 with open(gif_file, "rb") as file:
                     st.download_button(
