@@ -1,3 +1,19 @@
+import sys
+import subprocess
+
+# Garante a instalação das dependências caso o servidor não as leia
+try:
+    import s3fs
+except ImportError:
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "s3fs", "xarray", "h5netcdf", "cartopy", "matplotlib", "numpy", "imageio", "pillow"])
+    import s3fs
+
+import streamlit as st
+import datetime
+# ... resto do código do app.py igual
+
+
+
 import streamlit as st
 import datetime
 import time
