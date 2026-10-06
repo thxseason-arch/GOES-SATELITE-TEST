@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: muryllo-plotts-api
+    runtime: docker
+    plan: free
+    healthCheckPath: /status
+    autoDeploy: true
